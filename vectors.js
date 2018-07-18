@@ -35,6 +35,16 @@ class Point3d {
       return new Point3d(v.get(0,0), v.get(0,1), v.get(0,2));
     throw "Zbyt mały wektor";
   }
+  
+  toVector() {
+    let m = new Matrix(1, 4);
+    m.loadArray([this.x, this.y, this.z, 1]);
+    return m;
+  }
+  
+  toArray() {
+    return [this.x, this.y, this.z];
+  }
 }
 
 class Matrix {
@@ -98,7 +108,7 @@ class Matrix {
   }  
   
   multiply(mat) {
-    if(mat.sizeX != this.sizeY || mat.sizeY != this.sizeX) throw "wrong sizes";
+    if(/*mat.sizeX != this.sizeY ||*/ mat.sizeY != this.sizeX) throw "wrong sizes";
 
     let mt = new Matrix(mat.sizeX, this.sizeY);
     for (var x = 0; x < mat.sizeX; x++) {
@@ -127,6 +137,150 @@ class Matrix {
   }  
 }
 
+class transformationMatrix {
+  constructor() {
+    this.angleX = 0;
+    this.angleY = 0;
+    this.angleZ = 0;
+  }
+  
+  contructAllMatrix() {
+    let Rx = this.constructXMatrix();
+    let Ry = this.constructYMatrix();
+    let Rz = this.constructZMatrix();    
+    return Rx.multiply(Ry).multiply(Rz);
+  }
+
+  constructXMatrix() {
+    let m = new Matrix(4, 4, true);
+    m.set(1,1, Math.cos(this.angleX));
+    m.set(2,1, -1 * Math.sin(this.angleX));
+    m.set(1,2, Math.sin(this.angleX));
+    m.set(2,2, Math.cos(this.angleX));
+    return m;
+  }
+  
+  constructYMatrix() {
+    let m = new Matrix(4, 4, true);
+    m.set(0,0, Math.cos(this.angleY));
+    m.set(2,0, -1 * Math.sin(this.angleY));
+    m.set(0,2, Math.sin(this.angleY));
+    m.set(2,2, Math.cos(this.angleY));
+    return m;
+  }  
+  
+  constructZMatrix() {
+    let m = new Matrix(4, 4, true);
+    m.set(0,0, Math.cos(this.angleZ));
+    m.set(1,0, -1 * Math.sin(this.angleZ));
+    m.set(0,1, Math.sin(this.angleZ));
+    m.set(1,1, Math.cos(this.angleZ));
+    return m;
+  }
+}
+
+class Drawer {
+  constructor() {
+    this.canvas = document.createElement("canvas");    
+    this.context = this.canvas.getContext("2d");
+    this.canvas.height = window.innerHeight - 22;
+    this.canvas.width = window.innerWidth - 22;
+    document.body.appendChild(this.canvas);    
+    
+    this.viewport = {
+			zoom: 1,
+			x: this.canvas.width / 2,
+			y: this.canvas.height / 2,
+		}
+    
+    this.tm = new transformationMatrix();      
+    this.setTransform();
+  }
+  
+  setTransform(viewport) {
+    viewport = viewport || this.viewport;
+    this.context.setTransform(viewport.zoom, 0, 0, viewport.zoom, viewport.x, viewport.y);
+  }
+  
+  clear() {
+    this.setTransform({zoom: 1, x: 0, y: 0});
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.setTransform();
+  }  
+
+  getPointFromPoint3d(point3d) {
+    let v = point3d.toVector();
+    v = this.tm.contructAllMatrix().multiply(v);
+    let p3d = Point3d.fromVector(v)
+    return Point.fromPoint3D(p3d);    
+  }
+  
+  drawPoint3d(point3d) {
+    this.drawPoint(this.getPointFromPoint3d(point3d));
+  }
+  
+  drawLine3d(point3dFrom, point3dTo) {
+    let pointFrom = this.getPointFromPoint3d(point3dFrom);
+    let pointTo = this.getPointFromPoint3d(point3dTo);
+    this.drawLine(pointFrom, pointTo);
+  }
+    
+  drawPoint(point) {
+    this.context.beginPath();
+    this.context.arc(point.x, -point.y, 2, 0, 2 * Math.PI);  
+    this.context.stroke();
+  }
+  
+  drawLine(pointFrom, pointTo) {
+    this.context.beginPath();
+    this.context.moveTo(pointFrom.x, -pointFrom.y);
+    this.context.lineTo(pointTo.x, -pointTo.y);
+    this.context.stroke();   
+  }
+}
+
+let drawer = new Drawer();
+
+let p0 = new Point3d(0, 0, 0);
+let p1 = new Point3d(30, 0, 0);
+let p2 = new Point3d(0, 30, 0);
+let p3 = new Point3d(0, 0, 30);
+
+drawer.drawPoint3d(p1);
+drawer.drawPoint3d(p2);
+drawer.drawPoint3d(p3);
+drawer.drawLine3d(p0, p1);
+drawer.drawLine3d(p0, p2);
+drawer.drawLine3d(p0, p3);
+
+function step() {
+  drawer.clear();
+  drawer.drawPoint3d(p1);
+  drawer.drawPoint3d(p2);
+  drawer.drawPoint3d(p3);
+  drawer.drawLine3d(p0, p1);
+  drawer.drawLine3d(p0, p2);
+  drawer.drawLine3d(p0, p3);
+  if(drawer.tm.angleX < 2 * Math.PI) {
+    drawer.tm.angleX += (2 * Math.PI / 300);      
+  } else if(drawer.tm.angleY < 2 * Math.PI) {
+    drawer.tm.angleX = 2 * Math.PI;
+    drawer.tm.angleY += (2 * Math.PI / 300);      
+  } else if(drawer.tm.angleZ < 2 * Math.PI) {
+    drawer.tm.angleY = 2 * Math.PI;
+    drawer.tm.angleZ += (2 * Math.PI / 300);          
+  } else {
+    drawer.tm.angleX = 0;
+    drawer.tm.angleY = 0;
+    drawer.tm.angleZ = 0;
+  }
+  
+  window.requestAnimationFrame(step);
+}
+
+window.requestAnimationFrame(step);
+
+/*
 let m = new Matrix(2,3, true);
 m.loadArray([1,2,3,4,5,6]);
 let mt = m.transposition();
@@ -145,3 +299,13 @@ let m4 = m2.multiply(m1);
 
 console.log(m3.print());
 console.log(m4.print());
+
+let m5 = new Matrix(3, 2);
+let m6 = new Matrix(1, 3);
+m5.loadArray([1, -1, 2, 0, -3, 1]);
+m6.loadArray([2, 1, 0]);
+
+let m56 = m5.multiply(m6);
+
+console.info(m56.print());
+*/

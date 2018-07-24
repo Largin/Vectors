@@ -9,8 +9,8 @@ class Point {
   static fromPoint3D(p3d) {
     let skewing = {
       part: 2/3,
-      theta: 45 * Math.PI / 180,
-      fi: 45 * Math.PI / 180,
+      theta: 0 * Math.PI / 180,
+      fi: 0 * Math.PI / 180,
     }
 
     let x = p3d.x + p3d.z * Math.sin(skewing.theta) * skewing.part;
@@ -34,12 +34,6 @@ class Point3d {
     if(v.sizeY >= 3)
       return new Point3d(v.get(0,0), v.get(0,1), v.get(0,2));
     throw "Zbyt mały wektor";
-  }
-  
-  toVector() {
-    let m = new Matrix(1, 4);
-    m.loadArray([this.x, this.y, this.z, 1]);
-    return m;
   }
   
   toArray() {
@@ -135,6 +129,12 @@ class Matrix {
     }
     return str;
   }  
+  
+  static fromPoint3D(point3d) {
+    let m = new Matrix(1, 4);
+    m.loadArray([point3d.x, point3d.y, point3d.z, 1]);
+    return m;    
+  }
 }
 
 class transformationMatrix {
@@ -179,6 +179,30 @@ class transformationMatrix {
   }
 }
 
+class sceneObject {
+  constructor(position3d, label) {
+    this.position = position3d || new Point3d(0, 0, 0);
+    this.label = label || "?";
+  }
+}
+
+class Scene {
+  constructor() {
+    this.objects = [];
+  }  
+  
+  initExample() {
+    for(let i = 0; i < 30; i++) {
+      let p3d = new Point3d(150 * Math.cos(i * 2 * Math.PI / 30), 150 * Math.sin(i * 2* Math.PI / 30), 0);      
+      this.objects.push(new sceneObject(p3d, i+1));
+    }    
+  }
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  }
+}
+
 class Drawer {
   constructor() {
     this.canvas = document.createElement("canvas");    
@@ -209,7 +233,7 @@ class Drawer {
   }  
 
   getPointFromPoint3d(point3d) {
-    let v = point3d.toVector();
+    let v = Matrix.fromPoint3D(point3d);
     v = this.tm.contructAllMatrix().multiply(v);
     let p3d = Point3d.fromVector(v)
     return Point.fromPoint3D(p3d);    
@@ -237,38 +261,64 @@ class Drawer {
     this.context.lineTo(pointTo.x, -pointTo.y);
     this.context.stroke();   
   }
+  
+  drawText(point3d, text) {
+    let point = this.getPointFromPoint3d(point3d);
+    this.context.font="10px Arial";
+    this.context.textAlign="center";
+    this.context.textBaseline="middle";
+    this.context.fillText(text, point.x + 7, point.y - 7);
+  }  
+  
+  drawReference() {
+    let p0 = new Point3d(0, 0, 0);
+    let p1 = new Point3d(30, 0, 0);
+    let p2 = new Point3d(0, 30, 0);
+    let p3 = new Point3d(0, 0, 30);  
+    
+    this.context.strokeStyle="red";
+    this.drawPoint3d(p1);
+    this.drawLine3d(p0, p1);
+    this.context.strokeStyle="green";
+    this.drawPoint3d(p2);        
+    this.drawLine3d(p0, p2);
+    this.context.strokeStyle="blue";
+    this.drawPoint3d(p3);
+    this.drawLine3d(p0, p3);    
+    this.context.strokeStyle="black";
+  }
+  
+  render(obj) {
+    if(obj instanceof Scene) {
+      for (let so of obj) {
+        this.render(so); // scene
+      }
+    }
+    if(obj instanceof sceneObject) {
+      this.drawPoint3d(obj.position);
+      this.drawText(obj.position, obj.label);
+    }
+  }
 }
 
+
 let drawer = new Drawer();
-
-let p0 = new Point3d(0, 0, 0);
-let p1 = new Point3d(30, 0, 0);
-let p2 = new Point3d(0, 30, 0);
-let p3 = new Point3d(0, 0, 30);
-
-drawer.drawPoint3d(p1);
-drawer.drawPoint3d(p2);
-drawer.drawPoint3d(p3);
-drawer.drawLine3d(p0, p1);
-drawer.drawLine3d(p0, p2);
-drawer.drawLine3d(p0, p3);
+let scene = new Scene();
+scene.initExample();
 
 function step() {
   drawer.clear();
-  drawer.drawPoint3d(p1);
-  drawer.drawPoint3d(p2);
-  drawer.drawPoint3d(p3);
-  drawer.drawLine3d(p0, p1);
-  drawer.drawLine3d(p0, p2);
-  drawer.drawLine3d(p0, p3);
+  drawer.drawReference();
+  drawer.render(scene);
+  
   if(drawer.tm.angleX < 2 * Math.PI) {
-    drawer.tm.angleX += (2 * Math.PI / 300);      
+    drawer.tm.angleX += (2 * Math.PI / 500);      
   } else if(drawer.tm.angleY < 2 * Math.PI) {
     drawer.tm.angleX = 2 * Math.PI;
-    drawer.tm.angleY += (2 * Math.PI / 300);      
+    drawer.tm.angleY += (2 * Math.PI / 500);      
   } else if(drawer.tm.angleZ < 2 * Math.PI) {
     drawer.tm.angleY = 2 * Math.PI;
-    drawer.tm.angleZ += (2 * Math.PI / 300);          
+    drawer.tm.angleZ += (2 * Math.PI / 500);          
   } else {
     drawer.tm.angleX = 0;
     drawer.tm.angleY = 0;
@@ -279,33 +329,3 @@ function step() {
 }
 
 window.requestAnimationFrame(step);
-
-/*
-let m = new Matrix(2,3, true);
-m.loadArray([1,2,3,4,5,6]);
-let mt = m.transposition();
-
-console.log(m, mt);
-console.log(m.print());
-console.log(mt.print());
-
-let m1 = new Matrix(3,2);
-m1.loadArray([2,3,4,1,0,0]);
-let m2 = new Matrix(2,3);
-m2.loadArray([0,1000,1,100,0,10]);
-
-let m3 = m1.multiply(m2);
-let m4 = m2.multiply(m1);
-
-console.log(m3.print());
-console.log(m4.print());
-
-let m5 = new Matrix(3, 2);
-let m6 = new Matrix(1, 3);
-m5.loadArray([1, -1, 2, 0, -3, 1]);
-m6.loadArray([2, 1, 0]);
-
-let m56 = m5.multiply(m6);
-
-console.info(m56.print());
-*/

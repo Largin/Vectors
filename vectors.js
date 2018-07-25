@@ -101,6 +101,12 @@ class Matrix {
     return mt;
   }  
   
+  multiplyScalar(scalar) {
+    for (let i = 0; i < this.values.length; i++) {
+     this.values[i] *= scalar;      
+    }
+  }
+  
   multiply(mat) {
     if(/*mat.sizeX != this.sizeY ||*/ mat.sizeY != this.sizeX) throw "wrong sizes";
 
@@ -139,6 +145,7 @@ class Matrix {
 
 class transformationMatrix {
   constructor() {
+    this.zoom = 1;
     this.angleX = 0;
     this.angleY = 0;
     this.angleZ = 0;
@@ -148,7 +155,8 @@ class transformationMatrix {
     let Rx = this.constructXMatrix();
     let Ry = this.constructYMatrix();
     let Rz = this.constructZMatrix();    
-    return Rx.multiply(Ry).multiply(Rz);
+    let Z = this.constructZoomMatrix();    
+    return Rx.multiply(Ry).multiply(Rz).multiply(Z);
   }
 
   constructXMatrix() {
@@ -177,6 +185,14 @@ class transformationMatrix {
     m.set(1,1, Math.cos(this.angleZ));
     return m;
   }
+  
+  constructZoomMatrix() {
+    let m = new Matrix(4, 4, true);
+    m.set(0,0, this.zoom);
+    m.set(1,1, this.zoom);
+    m.set(2,2, this.zoom);
+    return m;    
+  }
 }
 
 class sceneObject {
@@ -184,6 +200,88 @@ class sceneObject {
     this.position = position3d || new Point3d(0, 0, 0);
     this.label = label || "?";
   }
+}
+
+class scenePathPoint{
+  constructor(position3d) {
+    this.position = position3d || new Point3d(0, 0, 0);
+  }  
+}
+
+class sceneElipse {
+  constructor(center, vectorSemiMinor, vectorSemiMajor) {
+    this.center = center;     
+    this.vectorSemiMinor = vectorSemiMinor;  
+    this.vectorSemiMajor = vectorSemiMajor;
+    
+    this.objects = [];
+    this.build();
+  }
+  
+  build() {   
+    for(let i = 0; i < 50; i++) {
+      let t = i * 2 * Math.PI / 50;
+      let p3d = new Point3d(this.center.x + this.vectorSemiMinor.x * Math.cos(t) + this.vectorSemiMajor.x * Math.sin(t), 
+                            this.center.y + this.vectorSemiMinor.y * Math.cos(t) + this.vectorSemiMajor.y * Math.sin(t), 
+                            this.center.z + this.vectorSemiMinor.z * Math.cos(t) + this.vectorSemiMajor.z * Math.sin(t));  
+      
+      this.objects.push(new scenePathPoint(p3d));
+    }      
+  }
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  }  
+}
+
+class Orbit {
+  constructor(semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
+    this.semiMajorAxis = semiMajorAxis;
+    this.semiMinorAxis = semiMajorAxis * Math.sqrt(1 - eccentricity * eccentricity);        
+    this.eccentricity = eccentricity;  
+    
+    this.inclination = inclination * Math.PI * 2 / 360;
+    this.ascendingNodeAngle = ascendingNodeAngle * Math.PI * 2 / 360;
+    this.periapsisAngle = periapsisAngle * Math.PI * 2 / 360;
+    
+    this.center = new Point3d(0,0,0);
+
+    this.objects = [];
+    this.build();    
+  }
+  
+  build() {
+    let pA = new Matrix(3, 3, true);
+    pA.set(0,0, Math.cos(this.periapsisAngle));
+    pA.set(1,0, Math.sin(this.periapsisAngle));
+    pA.set(0,1, -1 * Math.sin(this.periapsisAngle));
+    pA.set(1,1, Math.cos(this.periapsisAngle));
+    
+    let iA = new Matrix(3, 3, true);
+    iA.set(1,1, Math.cos(this.inclination));
+    iA.set(2,1, Math.sin(this.inclination));
+    iA.set(1,2, -1 * Math.sin(this.inclination));
+    iA.set(2,2, Math.cos(this.inclination));
+    
+    let anA = new Matrix(3, 3, true);
+    anA.set(0,0, Math.cos(this.ascendingNodeAngle));
+    anA.set(1,0, Math.sin(this.ascendingNodeAngle));
+    anA.set(0,1, -1 * Math.sin(this.ascendingNodeAngle));
+    anA.set(1,1, Math.cos(this.ascendingNodeAngle));  
+    
+    let m = pA.multiply(iA).multiply(anA);
+    
+    let v1 = new Point3d(m.get(0,0) * this.semiMinorAxis, m.get(1,0) * this.semiMinorAxis, m.get(2,0) * this.semiMinorAxis);
+    let v2 = new Point3d(m.get(0,1) * this.semiMajorAxis, m.get(1,1) * this.semiMajorAxis, m.get(2,1) * this.semiMajorAxis);
+    
+    console.log(v1, v2);
+    
+    this.objects.push(new sceneElipse(this.center, v1, v2));     
+  }
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  } 
 }
 
 class Scene {
@@ -197,6 +295,29 @@ class Scene {
       this.objects.push(new sceneObject(p3d, i+1));
     }    
   }
+  
+  initCircle() {
+    let v1 = new Point3d(150, 0, 50);
+    let v2 = new Point3d(0, 180, 0);
+    let c = new Point3d(50, 25, 75);
+    
+    for(let i = 0; i < 30; i++) {
+      let t = i * 2 * Math.PI / 30;
+      let p3d = new Point3d(c.x + v1.x * Math.cos(t) + v2.x * Math.sin(t), c.y + v1.y * Math.cos(t) + v2.y * Math.sin(t), c.z + v1.z * Math.cos(t) + v2.z * Math.sin(t));      
+      this.objects.push(new sceneObject(p3d, i+1));
+    }     
+  }
+  
+  initEllipse() {
+    this.objects.push(new sceneElipse(200, 0.5));
+  }   
+  
+  initOrbit() {   
+    this.objects.push(new Orbit(100, 0.016, 0, -11.26064, 114.20783));
+    this.objects.push(new Orbit(120, 0.0934, 1.850, 49.558, 286.502));
+    this.objects.push(new Orbit(300, 0.0489, 1.303, 100.464, 273.867));
+    this.objects.push(new Orbit(500, 0.2488, 17.16, 110.299, 113.834));
+  } 
   
   [Symbol.iterator]() { 
     return this.objects.values(); 
@@ -248,7 +369,14 @@ class Drawer {
     inputZ.type = "range";
     inputZ.setAttribute("list","ticks360");
     inputZ.oninput = this.updateRotationZ.bind(this);
-    fieldset.appendChild(inputZ);    
+    fieldset.appendChild(inputZ);  
+    
+    let inputZoom = document.createElement("input");
+    inputZoom.min = 5; inputZoom.max = 20; inputZoom.value = 10;
+    inputZoom.type = "range";
+    inputZoom.setAttribute("list","ticksZoom");
+    inputZoom.oninput = this.updateZoom.bind(this);
+    fieldset.appendChild(inputZoom);      
     
     document.body.appendChild(fieldset);
   }
@@ -266,6 +394,11 @@ class Drawer {
   updateRotationZ(e) {
     let angleDeg = e.target.value;
     this.tm.angleZ = (angleDeg / 360) * 2 * Math.PI;
+  }  
+  
+  updateZoom(e) {
+    let zoom = e.target.value / 10;
+    this.tm.zoom = zoom;
   }  
   
   setTransform(viewport) {
@@ -341,6 +474,22 @@ class Drawer {
         this.render(so); // scene
       }
     }
+    if(obj instanceof sceneElipse) {      
+      this.context.beginPath();
+      let p = this.getPointFromPoint3d(obj.objects[0].position);
+      this.context.moveTo(p.x,-p.y);
+      for (let spp of obj) {
+        p = this.getPointFromPoint3d(spp.position);
+        this.context.lineTo(p.x, -p.y);
+      } 
+      this.context.closePath();
+      this.context.stroke(); 
+    }     
+    if(obj instanceof Orbit) {      
+      for (let so of obj) {
+        this.render(so); // scene
+      } 
+    }    
     if(obj instanceof sceneObject) {
       this.drawPoint3d(obj.position);
       this.drawText(obj.position, obj.label);
@@ -351,25 +500,14 @@ class Drawer {
 
 let drawer = new Drawer();
 let scene = new Scene();
-scene.initExample();
+scene.initOrbit();
+console.log(scene);
 
 function step() {
   drawer.clear();
   drawer.drawReference();
   drawer.render(scene);
-  
-  /*if(drawer.tm.angleX < 2 * Math.PI) {
-    drawer.tm.angleX += (2 * Math.PI / 500);      
-  } else if(drawer.tm.angleY < 2 * Math.PI) {
-    drawer.tm.angleX = 2 * Math.PI;
-    drawer.tm.angleY += (2 * Math.PI / 500);      
-  } else 
-  if(drawer.tm.angleZ < 2 * Math.PI) {
-    drawer.tm.angleZ += (2 * Math.PI / 500);          
-  } else {
-    drawer.tm.angleZ = 0;
-  }*/
-  
+   
   window.requestAnimationFrame(step);
 }
 

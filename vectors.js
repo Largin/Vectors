@@ -216,7 +216,7 @@ class scenePathPoint{
   }  
 }
 
-class sceneElipse {
+class sceneEllipse {
   constructor(center, vectorSemiMinor, vectorSemiMajor) {
     this.center = center;     
     this.vectorSemiMinor = vectorSemiMinor;  
@@ -242,6 +242,20 @@ class sceneElipse {
   }  
 }
 
+class Planet {
+  constructor(name, orbit, trueAnomaly) {
+    this.name = name;
+    this.orbit = orbit;    
+    this.position = orbit.getObjectPosition(trueAnomaly);    
+    
+    this.objects = [new sceneObject(this.position, this.name)];
+  }
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  }  
+}
+
 class Orbit {
   constructor(foci, semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
     this.semiMajorAxis = semiMajorAxis;
@@ -256,6 +270,18 @@ class Orbit {
 
     this.objects = [];
     this.build();    
+  }
+  
+  getObjectPosition(trueAnomaly) {
+    let t = trueAnomaly * 2 * Math.PI / 360;
+    let p3d = new Point3d(this.ellipse.center.x + this.ellipse.vectorSemiMinor.x * Math.cos(t) + this.ellipse.vectorSemiMajor.x * Math.sin(t), 
+                          this.ellipse.center.y + this.ellipse.vectorSemiMinor.y * Math.cos(t) + this.ellipse.vectorSemiMajor.y * Math.sin(t), 
+                          this.ellipse.center.z + this.ellipse.vectorSemiMinor.z * Math.cos(t) + this.ellipse.vectorSemiMajor.z * Math.sin(t));      
+    return p3d;  
+  }
+  
+  addPlanet(name, trueAnomaly) {
+    this.objects.push(new Planet(name, this, trueAnomaly));
   }
   
   build() {
@@ -287,7 +313,9 @@ class Orbit {
     
     let center = this.foci.add(cv);
     
-    this.objects.push(new sceneElipse(center, v1.multiply(this.semiMajorAxis), v2.multiply(this.semiMinorAxis)));     
+    this.ellipse = new sceneEllipse(center, v1.multiply(this.semiMajorAxis), v2.multiply(this.semiMinorAxis));
+    
+    this.objects.push(this.ellipse);     
   }
   
   [Symbol.iterator]() { 
@@ -320,14 +348,22 @@ class Scene {
   }
   
   initEllipse() {
-    this.objects.push(new sceneElipse(200, 0.5));
+    this.objects.push(new sceneEllipse(200, 0.5));
   }   
   
   initOrbit() {   
-    this.objects.push(new Orbit(new Point3d(0, 0, 0), 100, 0.016, 0, -11.26064, 114.20783));
-    this.objects.push(new Orbit(new Point3d(0, 0, 0), 120, 0.0934, 1.850, 49.558, 286.502));
-    this.objects.push(new Orbit(new Point3d(0, 0, 0), 300, 0.0489, 1.303, 100.464, 273.867));
-    this.objects.push(new Orbit(new Point3d(0, 0, 0), 500, 0.2488, 17.16, 110.299, 113.834));
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 30 * 0.387098, 0.205630, 7.005, 48.331, 29.124));
+    this.objects[this.objects.length - 1].addPlanet("Mercury", 0);
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 30 * 0.723332, 0.006772, 3.39458, 76.680, 54.884));
+    this.objects[this.objects.length - 1].addPlanet("Venus", 0);
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 30, 0.016, 0, -11.26064, 114.20783));
+    this.objects[this.objects.length - 1].addPlanet("Earth", 0);
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 30 * 1.523679, 0.0934, 1.850, 49.558, 286.502));
+    this.objects[this.objects.length - 1].addPlanet("Mars", 0);
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 30 * 5.2044, 0.0489, 1.303, 100.464, 273.867));
+    this.objects[this.objects.length - 1].addPlanet("Jupiter", 0);
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 30 * 39.48, 0.2488, 17.16, 110.299, 113.834));
+    this.objects[this.objects.length - 1].addPlanet("Pluto", 0);
   } 
   
   [Symbol.iterator]() { 
@@ -383,7 +419,7 @@ class Drawer {
     fieldset.appendChild(inputZ);  
     
     let inputZoom = document.createElement("input");
-    inputZoom.min = 5; inputZoom.max = 20; inputZoom.value = 10;
+    inputZoom.min = 2; inputZoom.max = 100; inputZoom.value = 10;
     inputZoom.type = "range";
     inputZoom.setAttribute("list","ticksZoom");
     inputZoom.oninput = this.updateZoom.bind(this);
@@ -485,7 +521,7 @@ class Drawer {
         this.render(so); // scene
       }
     }
-    if(obj instanceof sceneElipse) {      
+    if(obj instanceof sceneEllipse) {      
       this.context.beginPath();
       let p = this.getPointFromPoint3d(obj.objects[0].position);
       this.context.moveTo(p.x,-p.y);
@@ -495,7 +531,12 @@ class Drawer {
       } 
       this.context.closePath();
       this.context.stroke(); 
-    }     
+    }   
+    if(obj instanceof Planet) {      
+      for (let so of obj) {
+        this.render(so); // scene
+      } 
+    }      
     if(obj instanceof Orbit) {      
       for (let so of obj) {
         this.render(so); // scene

@@ -216,10 +216,57 @@ class Drawer {
 			x: this.canvas.width / 2,
 			y: this.canvas.height / 2,
 		}
+      
+    this.initControls();
     
     this.tm = new transformationMatrix();      
     this.setTransform();
   }
+  
+  initControls() {
+    let fieldset = document.createElement("fieldset");
+    let legend = document.createElement("legend");
+    legend.innerHTML = "Rotation";
+    fieldset.appendChild(legend);
+
+    let inputX = document.createElement("input");
+    inputX.min = 0; inputX.max = 360; inputX.value = 0;
+    inputX.type = "range";
+    inputX.setAttribute("list","ticks360");
+    inputX.oninput = this.updateRotationX.bind(this);
+    fieldset.appendChild(inputX);
+    
+    let inputY = document.createElement("input");
+    inputY.min = 0; inputY.max = 360; inputY.value = 0;
+    inputY.type = "range";
+    inputY.setAttribute("list","ticks360");
+    inputY.oninput = this.updateRotationY.bind(this);
+    fieldset.appendChild(inputY);
+    
+    let inputZ = document.createElement("input");
+    inputZ.min = 0; inputZ.max = 360; inputZ.value = 0;
+    inputZ.type = "range";
+    inputZ.setAttribute("list","ticks360");
+    inputZ.oninput = this.updateRotationZ.bind(this);
+    fieldset.appendChild(inputZ);    
+    
+    document.body.appendChild(fieldset);
+  }
+  
+  updateRotationX(e) {
+    let angleDeg = e.target.value;
+    this.tm.angleX = (angleDeg / 360) * 2 * Math.PI;
+  }
+  
+  updateRotationY(e) {
+    let angleDeg = e.target.value;
+    this.tm.angleY = (angleDeg / 360) * 2 * Math.PI;
+  }
+  
+  updateRotationZ(e) {
+    let angleDeg = e.target.value;
+    this.tm.angleZ = (angleDeg / 360) * 2 * Math.PI;
+  }  
   
   setTransform(viewport) {
     viewport = viewport || this.viewport;
@@ -267,7 +314,7 @@ class Drawer {
     this.context.font="10px Arial";
     this.context.textAlign="center";
     this.context.textBaseline="middle";
-    this.context.fillText(text, point.x + 7, point.y - 7);
+    this.context.fillText(text, point.x + 7, - point.y - 7);
   }  
   
   drawReference() {
@@ -311,19 +358,17 @@ function step() {
   drawer.drawReference();
   drawer.render(scene);
   
-  if(drawer.tm.angleX < 2 * Math.PI) {
+  /*if(drawer.tm.angleX < 2 * Math.PI) {
     drawer.tm.angleX += (2 * Math.PI / 500);      
   } else if(drawer.tm.angleY < 2 * Math.PI) {
     drawer.tm.angleX = 2 * Math.PI;
     drawer.tm.angleY += (2 * Math.PI / 500);      
-  } else if(drawer.tm.angleZ < 2 * Math.PI) {
-    drawer.tm.angleY = 2 * Math.PI;
+  } else 
+  if(drawer.tm.angleZ < 2 * Math.PI) {
     drawer.tm.angleZ += (2 * Math.PI / 500);          
   } else {
-    drawer.tm.angleX = 0;
-    drawer.tm.angleY = 0;
     drawer.tm.angleZ = 0;
-  }
+  }*/
   
   window.requestAnimationFrame(step);
 }

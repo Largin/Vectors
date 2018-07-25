@@ -28,6 +28,14 @@ class Point3d {
     this.z = z || 0;    
   }
   
+  add(p3d) {
+    return new Point3d(this.x + p3d.x, this.y + p3d.y, this.z + p3d.z);     
+  }
+  
+  multiply(scalar) {
+    return new Point3d(this.x * scalar, this.y * scalar, this.z * scalar);    
+  }
+  
   static fromVector(v) {
     if(v.sizeX >= 3)
       return new Point3d(v.get(0,0), v.get(1,0), v.get(2,0));
@@ -235,7 +243,7 @@ class sceneElipse {
 }
 
 class Orbit {
-  constructor(semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
+  constructor(foci, semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
     this.semiMajorAxis = semiMajorAxis;
     this.semiMinorAxis = semiMajorAxis * Math.sqrt(1 - eccentricity * eccentricity);        
     this.eccentricity = eccentricity;  
@@ -244,7 +252,7 @@ class Orbit {
     this.ascendingNodeAngle = ascendingNodeAngle * Math.PI * 2 / 360;
     this.periapsisAngle = periapsisAngle * Math.PI * 2 / 360;
     
-    this.center = new Point3d(0,0,0);
+    this.foci = foci;
 
     this.objects = [];
     this.build();    
@@ -271,12 +279,15 @@ class Orbit {
     
     let m = pA.multiply(iA).multiply(anA);
     
-    let v1 = new Point3d(m.get(0,0) * this.semiMinorAxis, m.get(1,0) * this.semiMinorAxis, m.get(2,0) * this.semiMinorAxis);
-    let v2 = new Point3d(m.get(0,1) * this.semiMajorAxis, m.get(1,1) * this.semiMajorAxis, m.get(2,1) * this.semiMajorAxis);
+    let v1 = new Point3d(m.get(0,0), m.get(1,0), m.get(2,0));
+    let v2 = new Point3d(m.get(0,1), m.get(1,1), m.get(2,1));
     
-    console.log(v1, v2);
+    let c = Math.sqrt(this.semiMajorAxis * this.semiMajorAxis - this.semiMinorAxis * this.semiMinorAxis);
+    let cv = v1.multiply(c * -1);
     
-    this.objects.push(new sceneElipse(this.center, v1, v2));     
+    let center = this.foci.add(cv);
+    
+    this.objects.push(new sceneElipse(center, v1.multiply(this.semiMajorAxis), v2.multiply(this.semiMinorAxis)));     
   }
   
   [Symbol.iterator]() { 
@@ -313,10 +324,10 @@ class Scene {
   }   
   
   initOrbit() {   
-    this.objects.push(new Orbit(100, 0.016, 0, -11.26064, 114.20783));
-    this.objects.push(new Orbit(120, 0.0934, 1.850, 49.558, 286.502));
-    this.objects.push(new Orbit(300, 0.0489, 1.303, 100.464, 273.867));
-    this.objects.push(new Orbit(500, 0.2488, 17.16, 110.299, 113.834));
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 100, 0.016, 0, -11.26064, 114.20783));
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 120, 0.0934, 1.850, 49.558, 286.502));
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 300, 0.0489, 1.303, 100.464, 273.867));
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 500, 0.2488, 17.16, 110.299, 113.834));
   } 
   
   [Symbol.iterator]() { 

@@ -6,6 +6,10 @@ class Point {
     this.y = y || 0;
   }
   
+  distance(p) {
+    return Math.sqrt(Math.pow(this.x - p.x ,2) + Math.pow(this.y - p.y ,2));
+  }
+  
   static fromPoint3D(p3d) {
     let skewing = {
       part: 2/3,
@@ -203,6 +207,147 @@ class transformationMatrix {
   }
 }
 
+class sObject {}
+
+class sPath {
+  constructor() {
+    this.points = [];
+    this.offset = new Point3d(0,0,0);
+  }   
+}
+
+class sEllipse extends sPath {
+  constructor(centerVector, semiMajorVector, semiMinorVector) {
+    super();
+    this.centerVector = centerVector;
+    this.semiMajorVector = semiMajorVector;
+    this.semiMinorVector = semiMinorVector;
+    
+    this.build();
+  }
+  
+  build() {
+    for(let i = 0; i < 50; i++) {
+      let t = i * 2 * Math.PI / 50;
+      let v3d = new Point3d(this.centerVector.x + this.semiMajorVector.x * Math.cos(t) + this.semiMinorVector.x * Math.sin(t), 
+                            this.centerVector.y + this.semiMajorVector.y * Math.cos(t) + this.semiMinorVector.y * Math.sin(t), 
+                            this.centerVector.z + this.semiMajorVector.z * Math.cos(t) + this.semiMinorVector.z * Math.sin(t));  
+      
+      this.points.push(v3d);
+    }     
+  }
+}
+
+class sBody extends sObject {
+  constructor(name, orbit, trueAnomaly) {
+    super();
+    this.name = name;
+    this.orbit = orbit;
+    this.position = this.orbit.getBodyPosition(trueAnomaly);
+    this.offset = new Point3d(0,0,0);
+    
+    this.objects = [];
+  }
+  
+  updatePosition(trueAnomaly) {
+    this.position = this.orbit.getBodyPosition(trueAnomaly);
+  }
+  
+  addOrbit(semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
+    let o = new sOrbit(new Point3d(0,0,0), semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle);
+    o.offset = this.offset.add(this.position);
+    this.objects.push(o);
+  } 
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  }   
+}
+
+class sOrbit {
+  constructor(focus, semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
+    this.semiMajorAxis = semiMajorAxis;
+    this.semiMinorAxis = semiMajorAxis * Math.sqrt(1 - eccentricity * eccentricity);        
+    this.eccentricity = eccentricity;  
+    
+    this.inclination = inclination * Math.PI * 2 / 360;
+    this.ascendingNodeAngle = ascendingNodeAngle * Math.PI * 2 / 360;
+    this.periapsisAngle = periapsisAngle * Math.PI * 2 / 360;
+    
+    this.focus = focus; 
+    this.offset = new Point3d(0,0,0);
+    this.body = null;
+    this.build();     
+  }
+  
+  addBody(name, trueAnomaly) {
+    this.body = new sBody(name, this, trueAnomaly);
+  }
+  
+  getBodyPosition(trueAnomaly) {
+    let t = trueAnomaly * 2 * Math.PI / 360;
+    let p3d = new Point3d(this.ellipse.centerVector.x + this.ellipse.semiMajorVector.x * Math.cos(t) + this.ellipse.semiMinorVector.x * Math.sin(t), 
+                          this.ellipse.centerVector.y + this.ellipse.semiMajorVector.y * Math.cos(t) + this.ellipse.semiMinorVector.y * Math.sin(t), 
+                          this.ellipse.centerVector.z + this.ellipse.semiMajorVector.z * Math.cos(t) + this.ellipse.semiMinorVector.z * Math.sin(t));      
+    return p3d;  
+  }  
+  
+  build() {
+    let pA = new Matrix(3, 3, true);
+    pA.set(0,0, Math.cos(this.periapsisAngle));
+    pA.set(1,0, Math.sin(this.periapsisAngle));
+    pA.set(0,1, -1 * Math.sin(this.periapsisAngle));
+    pA.set(1,1, Math.cos(this.periapsisAngle));
+    
+    let iA = new Matrix(3, 3, true);
+    iA.set(1,1, Math.cos(this.inclination));
+    iA.set(2,1, Math.sin(this.inclination));
+    iA.set(1,2, -1 * Math.sin(this.inclination));
+    iA.set(2,2, Math.cos(this.inclination));
+    
+    let anA = new Matrix(3, 3, true);
+    anA.set(0,0, Math.cos(this.ascendingNodeAngle));
+    anA.set(1,0, Math.sin(this.ascendingNodeAngle));
+    anA.set(0,1, -1 * Math.sin(this.ascendingNodeAngle));
+    anA.set(1,1, Math.cos(this.ascendingNodeAngle));  
+    
+    let m = pA.multiply(iA).multiply(anA);
+    
+    let v1 = new Point3d(m.get(0,0), m.get(1,0), m.get(2,0));
+    let v2 = new Point3d(m.get(0,1), m.get(1,1), m.get(2,1));
+    
+    let c = Math.sqrt(this.semiMajorAxis * this.semiMajorAxis - this.semiMinorAxis * this.semiMinorAxis);
+    let cv = v1.multiply(c * -1);
+    
+    let center = this.focus.add(cv);
+    
+    this.ellipse = new sEllipse(center, v1.multiply(this.semiMajorAxis), v2.multiply(this.semiMinorAxis));    
+  }   
+}
+
+class sStar extends sObject {
+  constructor(name, position) {
+    super();
+    this.name = name || "Sun";
+    this.position = position || new Point3d(0, 0, 0);
+    this.offset = new Point3d(0, 0, 0);
+    
+    this.objects = [];
+  }
+  
+  addOrbit(semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
+    let o = new sOrbit(this.position, semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle);
+    o.offset = this.offset;
+    this.objects.push(o);
+  }
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  }   
+}
+
+
+
 class sceneObject {
   constructor(position3d, label) {
     this.position = position3d || new Point3d(0, 0, 0);
@@ -323,6 +468,24 @@ class Orbit {
   } 
 }
 
+class Sun {
+  constructor(position, name) {
+    this.name = name;
+    this.position = position;
+    
+    this.objects = [];
+    this.objects.push(new sceneObject(this.position, this.name));
+  }
+  
+  addOrbit(semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle) {
+    this.objects.push(new Orbit(this.position, semiMajorAxis, eccentricity, inclination, ascendingNodeAngle, periapsisAngle));
+  }
+  
+  [Symbol.iterator]() { 
+    return this.objects.values(); 
+  } 
+}
+
 class Scene {
   constructor() {
     this.objects = [];
@@ -350,6 +513,10 @@ class Scene {
   initEllipse() {
     this.objects.push(new sceneEllipse(200, 0.5));
   }   
+  
+  initEllipses() {
+    this.objects.push(new Orbit(new Point3d(0, 0, 0), 100, 0.25, 0, 0, 0));    
+  }
   
   initOrbit() {   
     this.objects.push(new Orbit(new Point3d(0, 0, 0), 30 * 0.387098, 0.205630, 7.005, 48.331, 29.124));
@@ -514,6 +681,44 @@ class Drawer {
     this.drawLine3d(p0, p3);    
     this.context.strokeStyle="black";
   }
+ 
+  renderN(obj) {
+    if(obj instanceof sObject) {
+      this.drawPoint3d(obj.position.add(obj.offset));
+      this.drawText(obj.position.add(obj.offset), obj.name);      
+    }
+    if(obj instanceof sPath) {
+      this.context.beginPath();
+      let p0 = this.getPointFromPoint3d(obj.offset.add(obj.points[0]));
+      this.context.moveTo(p0.x, -p0.y);   
+      for (var i = 1; i < obj.points.length; i++) {
+        let p = this.getPointFromPoint3d(obj.offset.add(obj.points[i]));
+        this.context.lineTo(p.x, -p.y);             
+      }
+      this.context.closePath();
+      this.context.stroke();       
+    }
+    if(obj instanceof sOrbit) {
+      obj.ellipse.offset = obj.offset;      
+      this.renderN(obj.ellipse);
+      if(obj.body){
+        obj.body.offset = obj.offset;
+        this.renderN(obj.body);        
+      }
+    }
+    if(obj instanceof sStar) {
+      for (let o of obj) {
+        o.offset = obj.offset;
+        this.renderN(o);
+      }      
+    }
+    if(obj instanceof sBody) {
+      for (let o of obj) {
+        o.offset = obj.offset.add(obj.position);
+        this.renderN(o);
+      }       
+    }
+  }
   
   render(obj) {
     if(obj instanceof Scene) {
@@ -521,7 +726,8 @@ class Drawer {
         this.render(so); // scene
       }
     }
-    if(obj instanceof sceneEllipse) {      
+    if(obj instanceof sceneEllipse) {    
+      this.context.setLineDash([2,8])
       this.context.beginPath();
       let p = this.getPointFromPoint3d(obj.objects[0].position);
       this.context.moveTo(p.x,-p.y);
@@ -531,6 +737,21 @@ class Drawer {
       } 
       this.context.closePath();
       this.context.stroke(); 
+          
+      let c = this.getPointFromPoint3d(obj.center);
+      let v1 = this.getPointFromPoint3d(obj.vectorSemiMajor);
+      let v2 = this.getPointFromPoint3d(obj.vectorSemiMinor);
+      
+      let d1 = c.distance(v1);
+      let d2 = c.distance(v2);
+      
+      this.context.setLineDash([4,6])
+      this.context.beginPath();
+      this.context.ellipse(c.x, c.y, d1, d1, 0 * Math.PI/180, 0, 2 * Math.PI);
+      this.context.stroke();
+      
+      this.context.setLineDash([]);
+      
     }   
     if(obj instanceof Planet) {      
       for (let so of obj) {
@@ -549,16 +770,19 @@ class Drawer {
   }
 }
 
-
 let drawer = new Drawer();
-let scene = new Scene();
-scene.initOrbit();
-console.log(scene);
+let s = new sStar("Kerbol", new Point3d(0,0,0));
+s.addOrbit(230, 0.7, 15, 45, 30);
+s.objects[0].addBody("Mun", 0);
+s.objects[0].body.updatePosition(90);
+s.objects[0].body.addOrbit(30, 0.4, 30, 125, 180);
+s.offset = new Point3d(50, 50, 50);
+console.log(s);
 
 function step() {
   drawer.clear();
   drawer.drawReference();
-  drawer.render(scene);
+  drawer.renderN(s);
    
   window.requestAnimationFrame(step);
 }
